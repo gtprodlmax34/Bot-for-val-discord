@@ -28,6 +28,7 @@ Notes:
 """
 import random
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -37,7 +38,18 @@ import pyautogui
 import pydirectinput
 from mss import mss
 
-BASE_DIR = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    # Running from a PyInstaller-built .exe: data files (templates/) are
+    # unpacked next to the executable, not next to this source file.
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+
+# Swappable log sink so a GUI can redirect output instead of stdout.
+log = print
+
+# Set by a GUI (or Ctrl+C) to make the run loop stop at the next safe point.
+STOP_EVENT = threading.Event()
 
 TEMPLATES = {
     "lf_text": BASE_DIR / "templates" / "lf_text.png",
@@ -76,7 +88,7 @@ def load_templates() -> dict[str, np.ndarray]:
     for name, path in TEMPLATES.items():
         img = cv2.imread(str(path), cv2.IMREAD_COLOR)
         if img is None:
-            print(f"ERROR: could not load {path}. Run capture_templates.py first.")
+            log(f"ERROR: could not load {path}. Run capture_templates.py first.")
             sys.exit(1)
         templates[name] = img
     return templates
@@ -87,7 +99,7 @@ def load_tab_templates() -> dict[str, np.ndarray]:
     for name, path in TAB_TEMPLATES.items():
         img = cv2.imread(str(path), cv2.IMREAD_COLOR)
         if img is None:
-            print(f"ERROR: could not load {path}. Run capture_templates.py first.")
+            log(f"ERROR: could not load {path}. Run capture_templates.py first.")
             sys.exit(1)
         templates[name] = img
     return templates
@@ -119,7 +131,7 @@ def switch_to_tab(pos: tuple[int, int]) -> None:
         after = grab_screen()
         if not np.array_equal(before, after):
             break
-        print(f"NOTE: click at {pos} didn't change the screen, retrying tab click...")
+        log(f"NOTE: click at {pos} didn't change the screen, retrying tab click...")
 
     focus_pos = (pos[0] + FOCUS_CLICK_OFFSET_X, pos[1])
     click_at(focus_pos)
@@ -132,6 +144,8 @@ def scroll_to_bottom() -> None:
     previous = None
     stable_count = 0
     for _ in range(SCROLL_MAX_PRESSES):
+        if STOP_EVENT.is_set():
+            return
         pydirectinput.press("end")
         time.sleep(SCROLL_CHECK_INTERVAL_SECONDS)
         screen = grab_screen()
@@ -154,7 +168,7 @@ def check_and_click_tab(
     screen = grab_screen()
     tab_pos = find_button(screen, tab_template)
     if tab_pos is None:
-        print(f"NOTE: could not find '{tab_name}' on screen, skipping it")
+        log(f"NOTE: could not find '{tab_name}' on screen, skipping it")
         return False
 
     switch_to_tab(tab_pos)
@@ -171,7 +185,7 @@ def check_and_click_tab(
 
     choice = random.choice(list(found.keys()))
     pos = found[choice]
-    print(f"[{tab_name}] found buttons {list(found.keys())} -> clicking '{choice}' at {pos}")
+    log(f"[{tab_name}] found buttons {list(found.keys())} -> clicking '{choice}' at {pos}")
     click_at(pos)
     return True
 
@@ -184,10 +198,12 @@ def run_cycle(
     clicked_any = False
     tab_items = list(tab_templates.items())
     for i, (tab_name, tab_template) in enumerate(tab_items):
+        if STOP_EVENT.is_set():
+            break
         if check_and_click_tab(tab_name, tab_template, templates):
             clicked_any = True
             if i < len(tab_items) - 1:
-                time.sleep(TAB_GAP_SECONDS)
+                STOP_EVENT.wait(TAB_GAP_SECONDS)
     return clicked_any
 
 
@@ -205,22 +221,30 @@ def next_interval() -> float:
 
 
 def main() -> None:
+    STOP_EVENT.clear()
     templates = load_templates()
     tab_templates = load_tab_templates()
-    print("Discord LF auto-clicker started. Press Ctrl+C to stop.")
+    log("Discord LF auto-clicker started. Press Ctrl+C to stop.")
 
-    while True:
+    loop_count = 0
+    while not STOP_EVENT.is_set():
+        loop_count += 1
         clicked_any = run_cycle(templates, tab_templates)
+        if STOP_EVENT.is_set():
+            break
         if clicked_any:
             wait_s = next_interval()
-            print(f"Waiting {wait_s:.0f}s before next check...")
-            time.sleep(wait_s)
+            log(f"Waiting {wait_s:.0f}s before next check...")
+            log(f"Looped {loop_count} times")
+            STOP_EVENT.wait(wait_s)
         else:
-            time.sleep(POLL_INTERVAL_SECONDS)
+            STOP_EVENT.wait(POLL_INTERVAL_SECONDS)
+    log("Stopped.")
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nStopped.")
+        STOP_EVENT.set()
+        log("\nStopped.")

@@ -1,0 +1,5 @@
+mss==10.2.0
+numpy==2.5.3
+opencv-python==5.0.0.93
+PyAutoGUI==0.9.54
+PyDirectInput==1.0.4
