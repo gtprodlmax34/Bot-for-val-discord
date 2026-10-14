@@ -3,3 +3,11 @@ numpy==2.5.3
 opencv-python==5.0.0.93
 PyAutoGUI==0.9.54
 PyDirectInput==1.0.4
+pillow==12.3.0
+winrt-runtime==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+winrt-Windows.Globalization==3.2.1
+winrt-Windows.Graphics.Imaging==3.2.1
+winrt-Windows.Media.Ocr==3.2.1
+winrt-Windows.Storage.Streams==3.2.1

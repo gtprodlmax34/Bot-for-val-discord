@@ -2,20 +2,15 @@
 GUI wrapper for the Discord LF-button auto-clicker.
 
 Gives you one big power button to start/stop the bot instead of running
-main.py from a terminal every time. Build a standalone .exe with build.ps1
-(bundles icon.ico as the app icon).
+main.py from a terminal every time.
 """
+# Build a standalone .exe with build.ps1.
 import queue
-import sys
 import threading
 import tkinter as tk
-from pathlib import Path
 from tkinter import scrolledtext
 
 import main as bot
-
-_ICON_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-ICON_PATH = _ICON_DIR / "icon.ico"
 
 IDLE_COLOR = "#2ecc71"      # green - ready to start
 IDLE_COLOR_DARK = "#27ae60"
@@ -34,11 +29,6 @@ class App:
         self.root.configure(bg=BG_COLOR)
         self.root.geometry("460x420")
         self.root.minsize(380, 340)
-        if ICON_PATH.exists():
-            try:
-                self.root.iconbitmap(str(ICON_PATH))
-            except tk.TclError:
-                pass
 
         self.log_queue: "queue.Queue[str]" = queue.Queue()
         self.worker: threading.Thread | None = None
